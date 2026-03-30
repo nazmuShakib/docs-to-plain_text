@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://docs-to-plain-text-converter.netlify.app/sitemap.xml
