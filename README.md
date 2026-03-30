@@ -2,6 +2,8 @@
 
 A free, browser-based tool that converts formatted documents to plain text while preserving structure such as numbered lists, nested lists, headings, and paragraphs.
 
+**URL:** https://docs-to-plain-text-converter.netlify.app/
+
 ---
 
 ## ✅ What It Supports
