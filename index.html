@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Docs → Plain Text Converter</title>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 20px;
+      }
+      #uploadZone {
+        border: 2px dashed #aaa;
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+        color: #666;
+        cursor: pointer;
+        margin-bottom: 16px;
+      }
+      #uploadZone:hover,
+      #uploadZone.dragover {
+        background: #f0f7ff;
+        border-color: #4a90e2;
+      }
+      #uploadZone input {
+        display: none;
+      }
+      #uploadZone .icon {
+        font-size: 36px;
+        margin-bottom: 8px;
+      }
+      #uploadZone .hint {
+        font-size: 13px;
+        color: #999;
+        margin-top: 6px;
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .tab-btn {
+        padding: 8px 16px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #f5f5f5;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .tab-btn.active {
+        background: #4a90e2;
+        color: white;
+        border-color: #4a90e2;
+      }
+      #editor {
+        width: 100%;
+        height: 400px;
+        font-family: monospace;
+        font-size: 14px;
+        padding: 15px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        resize: vertical;
+        line-height: 1.6;
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+      .toolbar button {
+        padding: 7px 14px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #f5f5f5;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      #downloadBtn {
+        background: #4a90e2;
+        color: white;
+        border-color: #4a90e2;
+      }
+      #clearBtn {
+        background: #e74c3c;
+        color: white;
+        border-color: #e74c3c;
+      }
+      #status {
+        margin-top: 8px;
+        font-size: 13px;
+        height: 20px;
+        color: green;
+      }
+      #status.error {
+        color: #e74c3c;
+      }
+      #progress {
+        display: none;
+        margin-top: 10px;
+        font-size: 13px;
+        color: #4a90e2;
+      }
+      #fileInfo {
+        font-size: 13px;
+        color: #555;
+        margin-bottom: 8px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>📄 Docs → Plain Text Converter</h2>
+    <p style="color: #666; margin-top: 0">
+      Upload a <strong>.docx</strong> file or paste from Google Docs.
+    </p>
+
+    <div id="uploadZone">
+      <input type="file" id="fileInput" accept=".docx" />
+      <div class="icon">📂</div>
+      <div>Click to upload or drag & drop a <strong>.docx</strong> file</div>
+      <div class="hint">
+        All processing happens in your browser — no file is sent to any server
+      </div>
+    </div>
+
+    <div id="fileInfo">📄 File: <span id="fileName"></span></div>
+    <div id="progress">⏳ Converting file, please wait...</div>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tabPaste" onclick="switchTab('paste')">
+        📋 Paste Mode
+      </button>
+      <button class="tab-btn" id="tabUpload" onclick="switchTab('upload')">
+        📁 Upload Mode
+      </button>
+    </div>
+
+    <textarea
+      id="editor"
+      placeholder="Paste from Google Docs or upload a .docx file..."
+    ></textarea>
+
+    <div class="toolbar">
+      <button id="downloadBtn" onclick="downloadTxt()">⬇️ Download .txt</button>
+      <button id="clearBtn" onclick="clearEditor()">🗑️ Clear</button>
+      <button id="copyBtn" onclick="copyText()">📋 Copy All</button>
+    </div>
+
+    <div id="status"></div>
+
+    <!-- debug div kept in DOM but never shown -->
+    <div id="debug" style="display: none"></div>
+
+    <script>
+      const editor = document.getElementById("editor");
+      const statusEl = document.getElementById("status");
+      const debugBox = document.getElementById("debug");
+      const fileInput = document.getElementById("fileInput");
+      const uploadZone = document.getElementById("uploadZone");
+      const progressEl = document.getElementById("progress");
+      const fileInfo = document.getElementById("fileInfo");
+      const fileNameEl = document.getElementById("fileName");
+
+      let currentTab = "paste";
+      uploadZone.style.display = "none";
+
+      function switchTab(tab) {
+        currentTab = tab;
+        document
+          .getElementById("tabPaste")
+          .classList.toggle("active", tab === "paste");
+        document
+          .getElementById("tabUpload")
+          .classList.toggle("active", tab === "upload");
+        uploadZone.style.display = tab === "upload" ? "block" : "none";
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // FILE UPLOAD
+      // ─────────────────────────────────────────────────────────────
+      uploadZone.addEventListener("click", () => fileInput.click());
+      uploadZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        uploadZone.classList.add("dragover");
+      });
+      uploadZone.addEventListener("dragleave", () =>
+        uploadZone.classList.remove("dragover"),
+      );
+      uploadZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove("dragover");
+        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+      });
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files[0]) handleFile(fileInput.files[0]);
+      });
+
+      function handleFile(file) {
+        if (!file.name.endsWith(".docx")) {
+          showStatus("❌ Only .docx files are supported", true);
+          return;
+        }
+        fileNameEl.textContent = `${file.name} (${formatBytes(file.size)})`;
+        fileInfo.style.display = "block";
+        progressEl.style.display = "block";
+        showStatus("");
+        const reader = new FileReader();
+        reader.onload = (e) => convertDocx(e.target.result, file.name);
+        reader.onerror = () => {
+          progressEl.style.display = "none";
+          showStatus("❌ Failed to read file", true);
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      async function convertDocx(arrayBuffer, name) {
+        try {
+          const mammothResult = await mammoth.convertToHtml({ arrayBuffer });
+          const listItems = await extractListItemsFromDocx(arrayBuffer);
+
+          // Debug info stored silently — never displayed
+          debugBox.textContent =
+            "=== MAMMOTH HTML ===\n" +
+            mammothResult.value +
+            "\n\n=== LIST ITEMS FROM XML ===\n" +
+            JSON.stringify(listItems, null, 2);
+
+          const plainText =
+            listItems && listItems.length > 0
+              ? buildPlainTextFromXmlData(listItems)
+              : convertNestedHtmlToText(mammothResult.value);
+
+          editor.value = plainText.trimEnd();
+          progressEl.style.display = "none";
+          showStatus(`✅ "${name}" converted successfully!`);
+        } catch (err) {
+          progressEl.style.display = "none";
+          showStatus(`❌ Error: ${err.message}`, true);
+        }
+      }
+
+      async function extractListItemsFromDocx(arrayBuffer) {
+        if (!window.JSZip)
+          await loadScript(
+            "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
+          );
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        const parser = new DOMParser();
+        const docXml = parser.parseFromString(
+          await zip.file("word/document.xml").async("string"),
+          "application/xml",
+        );
+        let numFormats = {};
+        const numFile = zip.file("word/numbering.xml");
+        if (numFile)
+          numFormats = parseNumberingXml(
+            parser.parseFromString(
+              await numFile.async("string"),
+              "application/xml",
+            ),
+          );
+
+        const ns =
+          "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        const items = [];
+
+        for (const para of docXml.getElementsByTagNameNS(ns, "p")) {
+          let text = "";
+          for (const run of para.getElementsByTagNameNS(ns, "t"))
+            text += run.textContent;
+
+          const numPr = para.getElementsByTagNameNS(ns, "numPr")[0];
+          if (numPr) {
+            const ilvlEl = numPr.getElementsByTagNameNS(ns, "ilvl")[0];
+            const numIdEl = numPr.getElementsByTagNameNS(ns, "numId")[0];
+            const ilvl = ilvlEl
+              ? parseInt(ilvlEl.getAttribute("w:val") || "0")
+              : 0;
+            const numId = numIdEl ? numIdEl.getAttribute("w:val") : "1";
+            const format =
+              numFormats[numId] && numFormats[numId][ilvl]
+                ? numFormats[numId][ilvl]
+                : ilvlToDefaultFormat(ilvl);
+            items.push({
+              type: "list",
+              text: text.trim(),
+              ilvl,
+              numId,
+              format,
+            });
+          } else {
+            const pPr = para.getElementsByTagNameNS(ns, "pPr")[0];
+            const spacing = pPr
+              ? pPr.getElementsByTagNameNS(ns, "spacing")[0]
+              : null;
+            items.push({
+              type: "para",
+              text: text.trim(),
+              spaceBefore: spacing
+                ? parseInt(spacing.getAttribute("w:before") || "0")
+                : 0,
+              spaceAfter: spacing
+                ? parseInt(spacing.getAttribute("w:after") || "0")
+                : 0,
+            });
+          }
+        }
+        return items;
+      }
+
+      function parseNumberingXml(numXml) {
+        const ns =
+          "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        const abstractNums = {},
+          result = {};
+        for (const an of numXml.getElementsByTagNameNS(ns, "abstractNum")) {
+          const id = an.getAttribute("w:abstractNumId");
+          abstractNums[id] = {};
+          for (const lvl of an.getElementsByTagNameNS(ns, "lvl")) {
+            const ilvl = parseInt(lvl.getAttribute("w:ilvl") || "0");
+            const nf = lvl.getElementsByTagNameNS(ns, "numFmt")[0];
+            abstractNums[id][ilvl] = wordFormatToStyle(
+              nf ? nf.getAttribute("w:val") : "decimal",
+            );
+          }
+        }
+        for (const num of numXml.getElementsByTagNameNS(ns, "num")) {
+          const numId = num.getAttribute("w:numId");
+          const anId = num.getElementsByTagNameNS(ns, "abstractNumId")[0];
+          if (!anId) continue;
+          result[numId] = {
+            ...(abstractNums[anId.getAttribute("w:val")] || {}),
+          };
+          for (const ov of num.getElementsByTagNameNS(ns, "lvlOverride")) {
+            const ilvl = parseInt(ov.getAttribute("w:ilvl") || "0");
+            const nf = ov.getElementsByTagNameNS(ns, "numFmt")[0];
+            if (nf)
+              result[numId][ilvl] = wordFormatToStyle(nf.getAttribute("w:val"));
+          }
+        }
+        return result;
+      }
+
+      function wordFormatToStyle(w) {
+        return (
+          {
+            decimal: "decimal",
+            lowerLetter: "lower-latin",
+            upperLetter: "upper-latin",
+            lowerRoman: "lower-roman",
+            upperRoman: "upper-roman",
+            bullet: "disc",
+            none: "disc",
+          }[w] || "decimal"
+        );
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // BUILD PLAIN TEXT FROM XML DATA
+      // ─────────────────────────────────────────────────────────────
+      function buildPlainTextFromXmlData(items) {
+        let result = "";
+        const counters = {};
+        let lastIlvl = -1,
+          lastNumId = null;
+
+        const listItems = items.filter((i) => i.type === "list");
+        const baseIlvl =
+          listItems.length > 0
+            ? listItems.reduce((mn, i) => Math.min(mn, i.ilvl), Infinity)
+            : 0;
+
+        for (const item of items) {
+          if (item.type === "para") {
+            result += item.text ? item.text + "\n" : "\n";
+            lastIlvl = -1;
+            lastNumId = null;
+            continue;
+          }
+
+          const { text, ilvl, numId, format } = item;
+          if (!text) continue;
+
+          const normIlvl = ilvl - baseIlvl;
+          const indent = "  ".repeat(normIlvl + 1);
+
+          if (!counters[numId]) counters[numId] = {};
+          if (ilvl < lastIlvl && numId === lastNumId) {
+            for (let d = ilvl + 1; d <= lastIlvl; d++)
+              delete counters[numId][d];
+          }
+          if (!counters[numId][ilvl]) counters[numId][ilvl] = 1;
+          result += `${indent}${formatCounter(counters[numId][ilvl], format)} ${text}\n`;
+          counters[numId][ilvl]++;
+          lastIlvl = ilvl;
+          lastNumId = numId;
+        }
+        return result;
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // FALLBACK HTML converter
+      // ─────────────────────────────────────────────────────────────
+      function convertNestedHtmlToText(html) {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        return processBlocks(flattenToBlocks(doc.body)).trimEnd();
+      }
+
+      function flattenToBlocks(node) {
+        const BLOCK = new Set([
+          "p",
+          "ol",
+          "ul",
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+          "table",
+          "br",
+        ]);
+        const blocks = [];
+        for (const child of node.childNodes) {
+          if (child.nodeType !== Node.ELEMENT_NODE) continue;
+          if (BLOCK.has(child.tagName.toLowerCase())) {
+            blocks.push(child);
+          } else {
+            blocks.push(...flattenToBlocks(child));
+          }
+        }
+        return blocks;
+      }
+
+      function processBlocks(blocks, styleMap = null) {
+        let result = "";
+        for (const node of blocks) {
+          const tag = node.tagName.toLowerCase();
+          if (tag === "ol" || tag === "ul") {
+            result += processListNode(node, 0, styleMap);
+          } else if (tag === "p") {
+            const text = extractInlineText(node).trim();
+            result += text ? text + "\n" : "\n";
+          } else if (tag === "h1") {
+            result += `${extractInlineText(node).toUpperCase()}\n${"=".repeat(40)}\n`;
+          } else if (tag === "h2") {
+            result += `${extractInlineText(node)}\n${"-".repeat(40)}\n`;
+          } else if (["h3", "h4", "h5", "h6"].includes(tag)) {
+            result += `${extractInlineText(node)}\n`;
+          } else if (tag === "table") {
+            result += processTable(node);
+          } else if (tag === "br") {
+            result += "\n";
+          }
+        }
+        return result;
+      }
+
+      function processListNode(listNode, depth, styleMap) {
+        let style = ilvlToDefaultFormat(depth);
+        if (listNode.tagName.toLowerCase() === "ul") {
+          style = "disc";
+        } else if (styleMap) {
+          for (const cls of Array.from(listNode.classList)) {
+            if (styleMap.has(cls)) {
+              style = styleMap.get(cls);
+              break;
+            }
+          }
+          const m = (listNode.getAttribute("style") || "").match(
+            /list-style-type\s*:\s*([\w-]+)/i,
+          );
+          if (m) style = m[1].toLowerCase();
+        }
+
+        const indent = "  ".repeat(depth + 1);
+        let result = "",
+          counter = 1;
+
+        listNode.childNodes.forEach((child) => {
+          if (child.nodeType !== Node.ELEMENT_NODE) return;
+          const tag = child.tagName.toLowerCase();
+          if (tag === "li") {
+            let text = "",
+              nested = "";
+            child.childNodes.forEach((c) => {
+              if (c.nodeType === Node.TEXT_NODE) {
+                text += c.textContent;
+              } else if (c.nodeType === Node.ELEMENT_NODE) {
+                const ct = c.tagName.toLowerCase();
+                if (ct === "ol" || ct === "ul") {
+                  nested += processListNode(c, depth + 1, styleMap);
+                } else if (ct === "p") {
+                  c.childNodes.forEach((pc) => {
+                    if (pc.nodeType === Node.TEXT_NODE) {
+                      text += pc.textContent;
+                    } else if (pc.nodeType === Node.ELEMENT_NODE) {
+                      const pt = pc.tagName.toLowerCase();
+                      if (pt === "ol" || pt === "ul")
+                        nested += processListNode(pc, depth + 1, styleMap);
+                      else text += extractInlineText(pc);
+                    }
+                  });
+                } else {
+                  text += extractInlineText(c);
+                }
+              }
+            });
+            text = text.trim();
+            if (text) {
+              result += `${indent}${formatCounter(counter, style)} ${text}\n`;
+              counter++;
+            }
+            if (nested) result += nested;
+          } else if (tag === "ol" || tag === "ul") {
+            result += processListNode(child, depth + 1, styleMap);
+          }
+        });
+        return result;
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // PASTE HANDLER — Google Docs
+      // ─────────────────────────────────────────────────────────────
+      editor.addEventListener("paste", (event) => {
+        const html = event.clipboardData.getData("text/html");
+        if (html && currentTab === "paste") {
+          event.preventDefault();
+          // Store in hidden debug div silently
+          debugBox.textContent = html;
+          const formatted = convertGoogleDocsHtml(html);
+          insertAtCursor(editor, formatted);
+          showStatus("✅ Formatting preserved!");
+        }
+      });
+
+      function convertGoogleDocsHtml(html) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+        const styleMap = buildCssStyleMap(doc);
+        const blocks = flattenToBlocks(doc.body);
+        return processBlocks(blocks, styleMap).trimEnd();
+      }
+
+      function buildCssStyleMap(doc) {
+        const map = new Map();
+        doc.querySelectorAll("style").forEach((styleEl) => {
+          const re =
+            /\.([\w-]+)[^{]*\{[^}]*list-style-type\s*:\s*([\w-]+)[^}]*\}/gi;
+          let m;
+          while ((m = re.exec(styleEl.textContent)) !== null) {
+            map.set(m[1].trim(), m[2].trim().toLowerCase());
+          }
+        });
+        return map;
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // SHARED UTILITIES
+      // ─────────────────────────────────────────────────────────────
+      function ilvlToDefaultFormat(ilvl) {
+        return [
+          "decimal",
+          "lower-latin",
+          "lower-roman",
+          "decimal",
+          "lower-latin",
+          "lower-roman",
+        ][ilvl % 6];
+      }
+
+      function formatCounter(count, styleType) {
+        switch (styleType) {
+          case "lower-alpha":
+          case "lower-latin":
+            return `${indexToAlpha(count, false)}.`;
+          case "upper-alpha":
+          case "upper-latin":
+            return `${indexToAlpha(count, true)}.`;
+          case "lower-roman":
+            return `${toRoman(count, false)}.`;
+          case "upper-roman":
+            return `${toRoman(count, true)}.`;
+          case "disc":
+          case "circle":
+          case "square":
+            return `•`;
+          case "decimal":
+          default:
+            return `${count}.`;
+        }
+      }
+
+      function indexToAlpha(num, upper) {
+        let r = "";
+        while (num > 0) {
+          num--;
+          r = String.fromCharCode(65 + (num % 26)) + r;
+          num = Math.floor(num / 26);
+        }
+        return upper ? r.toUpperCase() : r.toLowerCase();
+      }
+
+      function toRoman(num, upper) {
+        const val = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+        const syms = [
+          "M",
+          "CM",
+          "D",
+          "CD",
+          "C",
+          "XC",
+          "L",
+          "XL",
+          "X",
+          "IX",
+          "V",
+          "IV",
+          "I",
+        ];
+        let r = "";
+        val.forEach((v, i) => {
+          while (num >= v) {
+            r += syms[i];
+            num -= v;
+          }
+        });
+        return upper ? r : r.toLowerCase();
+      }
+
+      function extractInlineText(node) {
+        if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+        if (node.nodeType !== Node.ELEMENT_NODE) return "";
+        const tag = node.tagName.toLowerCase();
+        if (tag === "ol" || tag === "ul") return "";
+        const inner = Array.from(node.childNodes)
+          .map(extractInlineText)
+          .join("");
+        switch (tag) {
+          case "b":
+          case "strong":
+            return `**${inner}**`;
+          case "i":
+          case "em":
+            return `_${inner}_`;
+          case "u":
+            return `__${inner}__`;
+          case "br":
+            return "\n";
+          default:
+            return inner;
+        }
+      }
+
+      function processTable(tableNode) {
+        let result = "\n";
+        const rows = tableNode.querySelectorAll("tr");
+        const colWidths = [];
+        rows.forEach((row) => {
+          Array.from(row.querySelectorAll("td, th")).forEach((cell, i) => {
+            colWidths[i] = Math.max(
+              colWidths[i] || 0,
+              cell.textContent.trim().length,
+            );
+          });
+        });
+        rows.forEach((row, ri) => {
+          const cells = row.querySelectorAll("td, th");
+          const rowText = Array.from(cells)
+            .map((c, i) => c.textContent.trim().padEnd(colWidths[i]))
+            .join(" | ");
+          result += rowText + "\n";
+          if (ri === 0)
+            result += colWidths.map((w) => "-".repeat(w)).join("-+-") + "\n";
+        });
+        return result + "\n";
+      }
+
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          if (document.querySelector(`script[src="${src}"]`)) {
+            resolve();
+            return;
+          }
+          const s = document.createElement("script");
+          s.src = src;
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+
+      function downloadTxt() {
+        const text = editor.value.trimEnd();
+        if (!text) {
+          showStatus("❌ Nothing to download", true);
+          return;
+        }
+        const a = Object.assign(document.createElement("a"), {
+          href: URL.createObjectURL(new Blob([text], { type: "text/plain" })),
+          download:
+            (fileNameEl.textContent.split(" ")[0] || "converted") + ".txt",
+        });
+        a.click();
+        URL.revokeObjectURL(a.href);
+        showStatus("✅ Downloaded!");
+      }
+
+      function clearEditor() {
+        editor.value = "";
+        fileInfo.style.display = "none";
+        fileInput.value = "";
+        debugBox.textContent = "";
+        showStatus("🗑️ Cleared");
+      }
+
+      function copyText() {
+        const text = editor.value.trimEnd();
+        if (!text) {
+          showStatus("❌ Nothing to copy", true);
+          return;
+        }
+        navigator.clipboard
+          .writeText(text)
+          .then(() => showStatus("✅ Copied!"))
+          .catch(() => showStatus("❌ Copy failed", true));
+      }
+
+      function insertAtCursor(textarea, text) {
+        const s = textarea.selectionStart,
+          e = textarea.selectionEnd;
+        textarea.value =
+          textarea.value.substring(0, s) + text + textarea.value.substring(e);
+        textarea.selectionStart = textarea.selectionEnd = s + text.length;
+      }
+
+      function showStatus(msg, isError = false) {
+        statusEl.textContent = msg;
+        statusEl.className = isError ? "error" : "";
+        if (msg) setTimeout(() => (statusEl.textContent = ""), 4000);
+      }
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / 1048576).toFixed(1) + " MB";
+      }
+    </script>
+  </body>
+</html>
