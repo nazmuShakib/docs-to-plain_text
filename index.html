@@ -3,7 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Docs → Plain Text Converter</title>
+
+    <title>Free Docx to Plain Text Converter Online | Word & Google Docs</title>
+
+    <!-- ✅ Meta description — shows in Google search results -->
+    <meta
+      name="description"
+      content="Free online tool to convert Word .docx files and Google Docs to plain text. Preserves lists, headings and formatting. No upload to server — 100% private."
+    />
+
+    <!-- ✅ Keywords (less important but still useful) -->
+    <meta
+      name="keywords"
+      content="docx to plain text, word to text converter, google docs to plain text, remove word formatting, convert docx to txt online free"
+    />
+
+    <!-- ✅ Robots -->
+    <meta name="robots" content="index, follow" />
+
+    <!-- ✅ Canonical URL — tells Google the official URL of your page -->
+    <link
+      rel="canonical"
+      href="https://docs-to-plain-text-converter.netlify.app/"
+    />
+
     <!-- Preconnect to external scripts for faster load -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="preconnect" href="https://pagead2.googlesyndication.com" />
@@ -164,6 +187,73 @@
     <!-- debug div kept in DOM but never shown -->
     <div id="debug" style="display: none"></div>
 
+    <section style="margin-top: 60px; line-height: 1.8; color: #444">
+      <h2>What is this tool?</h2>
+      <p>
+        This free online converter lets you convert Word
+        <strong>.docx files</strong> and <strong>Google Docs</strong> to plain
+        text instantly — right in your browser. No file is ever uploaded to a
+        server, keeping your data 100% private.
+      </p>
+
+      <h2>How to convert Word to plain text</h2>
+      <ol>
+        <li>Click the <strong>Upload Mode</strong> tab</li>
+        <li>
+          Drag and drop your <strong>.docx file</strong> or click to browse
+        </li>
+        <li>Your document is instantly converted to plain text</li>
+        <li>
+          Download the result as a <strong>.txt file</strong> or copy to
+          clipboard
+        </li>
+      </ol>
+
+      <h2>How to convert Google Docs to plain text</h2>
+      <ol>
+        <li>Open your document in <strong>Google Docs</strong></li>
+        <li>
+          Select all with <strong>Ctrl+A</strong> and copy with
+          <strong>Ctrl+C</strong>
+        </li>
+        <li>Click the <strong>Paste Mode</strong> tab on this tool</li>
+        <li>
+          Paste with <strong>Ctrl+V</strong> — formatting is preserved
+          automatically
+        </li>
+      </ol>
+
+      <h2>Why use plain text?</h2>
+      <ul>
+        <li>Plain text works in every application</li>
+        <li>Removes hidden formatting that causes issues when copying</li>
+        <li>Ideal for pasting into emails, code editors, or CMS platforms</li>
+        <li>Smaller file size than .docx</li>
+      </ul>
+
+      <h2>Frequently Asked Questions</h2>
+
+      <h3>Is this tool free?</h3>
+      <p>Yes, completely free with no sign-up required.</p>
+
+      <h3>Is my document safe?</h3>
+      <p>
+        Yes. All conversion happens in your browser. Your file is never sent to
+        any server.
+      </p>
+
+      <h3>What file types are supported?</h3>
+      <p>
+        Currently <strong>.docx</strong> (Word 2007 and later) and
+        <strong>Google Docs</strong> via paste are supported.
+      </p>
+
+      <h3>Does it preserve lists?</h3>
+      <p>
+        Yes. Numbered lists, lettered sub-lists, Roman numeral lists, bullet
+        points, and blank lines are all preserved.
+      </p>
+    </section>
     <script>
       const editor = document.getElementById("editor");
       const statusEl = document.getElementById("status");
