@@ -590,6 +590,12 @@
           .getElementById("tabUpload")
           .classList.toggle("active", tab === "upload");
         uploadZone.style.display = tab === "upload" ? "block" : "none";
+
+        // Hide file info & progress when leaving upload mode
+        if (tab !== "upload") {
+          fileInfo.style.display = "none";
+          progressEl.style.display = "none";
+        }
       }
 
       // ─────────────────────────────────────────────────────────────
